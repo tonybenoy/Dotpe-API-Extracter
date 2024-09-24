@@ -39,17 +39,33 @@ def make_api_request(store_id):
     if response.status_code == 200:
         return response.json()
     elif response.status_code == 403:
-        # 403 Too Many Requests (Rate Limit Exceeded)
+        # 403 Forbidden, could indicate rate limit (based on your API behavior)
         print(f"Rate limit hit. Waiting to retry storeID: {store_id}")
         return "rate_limit"
     else:
         return None
 
+# Function to load existing results from the JSON file
+def load_existing_results():
+    if os.path.exists(output_file):
+        with open(output_file, "r") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return []
+    return []
+
 # Function to save the results and checkpoint
 def save_results(results, current_store_id):
-    # Save the results to the output JSON file
+    # Load existing data from the output file
+    existing_results = load_existing_results()
+
+    # Append new results to the existing data
+    existing_results.extend(results)
+
+    # Save the combined results back to the JSON file
     with open(output_file, "w") as f:
-        json.dump(results, f, indent=4)
+        json.dump(existing_results, f, indent=4)
 
     # Save the current store_id to the checkpoint file
     with open(checkpoint_file, "w") as f:
@@ -100,6 +116,9 @@ while True:
 
     # Increment the store_id for the next request
     store_id += 1
+
+    # Clear the results list after saving to avoid storing the same results in memory
+    results.clear()
 
     # Add a small delay to avoid hitting rate limits
     time.sleep(1)
