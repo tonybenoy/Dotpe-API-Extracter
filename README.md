@@ -1,4 +1,4 @@
-This project is a deliberate demonstration designed purely for educational purposes.
+This project is a deliberate [demonstration](https://x.com/deedydas/status/1838137082683728323) designed purely for educational purposes.
 
 # Legal Disclaimer
 This project is solely for educational purposes.
