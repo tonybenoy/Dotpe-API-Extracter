@@ -7,8 +7,6 @@ By using this repository, you agree to the following terms:
 
     The authors are not liable for any damages or misuse of this code.
     The code provided here is intended only for local testing, research, and learning.
-    Do not deploy or distribute this code in a live environment or as part of a system connected to the internet.
-    Do not use this code to test or attack any unauthorized systems. Unauthorized access to computer systems is illegal and punishable by law.
 
 Any misuse of the contents of this repository that leads to damaging or unauthorized access to systems will be the sole responsibility of the user. This project is provided "as is" without warranty of any kind.
 
