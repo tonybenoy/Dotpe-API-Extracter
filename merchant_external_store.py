@@ -39,7 +39,7 @@ def make_api_request(store_id):
     if response.status_code == 200:
         return response.json()
     elif response.status_code == 403:
-        # 429 Too Many Requests (Rate Limit Exceeded)
+        # 403 Too Many Requests (Rate Limit Exceeded)
         print(f"Rate limit hit. Waiting to retry storeID: {store_id}")
         return "rate_limit"
     else:
