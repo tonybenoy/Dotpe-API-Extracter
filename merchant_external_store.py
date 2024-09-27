@@ -2,12 +2,13 @@ import requests
 import json
 import time
 import os
+import sqlite3
 
 # Base URL of the API
 base_url = "https://api.dotpe.in/api/merchant/external/store"
 
 # File to save results and store_id checkpoint
-output_file = "dotpe_api_results.json"
+db_file = "dotpe_api_results.db"
 checkpoint_file = "checkpoint.txt"
 
 # Headers to avoid rate limit as much as possible
@@ -45,46 +46,71 @@ def make_api_request(store_id):
     else:
         return None
 
-# Function to load existing results from the JSON file
-def load_existing_results():
-    if os.path.exists(output_file):
-        with open(output_file, "r") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
-    return []
+# Function to initialize SQLite DB and table
+def init_db():
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS store_data (
+            store_id INTEGER PRIMARY KEY,
+            data TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# Function to save the results and checkpoint
-def save_results(results, current_store_id):
-    # Load existing data from the output file
-    existing_results = load_existing_results()
+# Function to save the results to SQLite DB
+def save_results(store_id, result):
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
 
-    # Append new results to the existing data
-    existing_results.extend(results)
+    # Insert store_id and the JSON result (stored as text)
+    cursor.execute('''
+        INSERT INTO store_data (store_id, data)
+        VALUES (?, ?)
+    ''', (store_id, json.dumps(result)))
 
-    # Save the combined results back to the JSON file
-    with open(output_file, "w") as f:
-        json.dump(existing_results, f, indent=4)
+    conn.commit()
+    conn.close()
 
-    # Save the current store_id to the checkpoint file
-    with open(checkpoint_file, "w") as f:
-        f.write(str(current_store_id))
-
-# Function to load the last checkpoint
+# Function to load the last checkpoint from the DB or checkpoint file
 def load_checkpoint():
-    # Check if checkpoint file exists
+    # First check if the SQLite database exists and contains data
+    if os.path.exists(db_file):
+        conn = sqlite3.connect(db_file)
+        cursor = conn.cursor()
+
+        # Query for the maximum store_id from the database
+        cursor.execute('SELECT MAX(store_id) FROM store_data')
+        result = cursor.fetchone()
+        conn.close()
+
+        # If the database has data, return the next store_id
+        if result and result[0] is not None:
+            return result[0] + 1
+
+    # If no data in DB, or DB doesn't exist, check the checkpoint file
     if os.path.exists(checkpoint_file):
         with open(checkpoint_file, "r") as f:
-            return int(f.read().strip())
-    else:
-        return 1  # Default to store_id = 1 if no checkpoint
+            try:
+                return int(f.read().strip())
+            except ValueError:
+                print("Invalid checkpoint file. Starting from store_id = 1.")
 
-# Load the last store_id from the checkpoint
+    # Default to store_id = 1 if no data is found in DB or checkpoint file
+    return 1
+
+# Function to save the checkpoint in case DB isn't available
+def save_checkpoint(store_id):
+    with open(checkpoint_file, "w") as f:
+        f.write(str(store_id))
+
+# Load the last store_id from the checkpoint (DB or file)
 store_id = load_checkpoint()
 
-# Initialize results list
-results = []
+# Initialize the database and table
+init_db()
+
 
 # Loop through store IDs and handle rate limiting with backoff
 backoff_time = 5  # Initial backoff time in seconds
@@ -105,24 +131,21 @@ while True:
     # Reset backoff time after a successful request
     backoff_time = 5
 
-    # Append the result to the list
-    results.append({
-        "store_id": store_id,
-        "data": result
-    })
+    # Save the results to the SQLite DB or save a checkpoint if DB not available
+    try:
+        save_results(store_id, result)
+    except Exception as e:
+        print(f"Failed to save results to DB: {e}. Saving checkpoint instead.")
 
-    # Save the results and the current store_id
-    save_results(results, store_id)
+    # Continuously update the checkpoint after each request
+    save_checkpoint(store_id)
 
     # Increment the store_id for the next request
     store_id += 1
 
-    # Clear the results list after saving to avoid storing the same results in memory
-    results.clear()
-
     # Add a small delay to avoid hitting rate limits
     time.sleep(1)
 
-# Save final results before exiting
-save_results(results, store_id)
-print(f"Results saved to {output_file} and checkpoint saved to {checkpoint_file}")
+# Save final checkpoint before exiting
+save_checkpoint(store_id)
+print(f"Results saved to SQLite DB: {db_file} and checkpoint saved to {checkpoint_file}")
